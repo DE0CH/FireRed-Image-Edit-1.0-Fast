@@ -6,6 +6,8 @@ at import time and falls back to PyTorch scaled-dot-product attention (SDPA)
 automatically.  The public class name / call signature are unchanged.
 """
 
+import os
+
 import torch
 import torch.nn.functional as F
 from typing import Optional, Tuple
@@ -29,7 +31,11 @@ _fa3_available: bool = False
 _fa3_unavailable_reason: str = ""
 _flash_attn_func = None
 
-if _is_blackwell():
+if os.environ.get("FORCE_SDPA") == "1":
+    _fa3_unavailable_reason = (
+        "FORCE_SDPA=1 set; using scaled-dot-product attention (SDPA)."
+    )
+elif _is_blackwell():
     _fa3_unavailable_reason = (
         "FlashAttention-3 is not yet supported on Blackwell (sm_100) GPUs. "
         "Falling back to scaled-dot-product attention (SDPA)."

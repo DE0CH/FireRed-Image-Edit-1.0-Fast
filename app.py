@@ -34,15 +34,38 @@ from qwenimage.qwen_fa3_processor import QwenDoubleStreamAttnProcessorFA3
 
 dtype = torch.bfloat16
 
-pipe = QwenImageEditPlusPipeline.from_pretrained(
-    "FireRedTeam/FireRed-Image-Edit-1.1",
-    transformer=QwenImageTransformer2DModel.from_pretrained(
+# SHARD_TRANSFORMER=1 shards the transformer across all visible GPUs (for
+# hosts with several small GPUs instead of one large one, e.g. Modal 4xA10G).
+# Default behavior (single large GPU, as on HF Spaces) is unchanged.
+_shard = os.environ.get("SHARD_TRANSFORMER") == "1" and torch.cuda.device_count() > 1
+
+if _shard:
+    _n = torch.cuda.device_count()
+    transformer = QwenImageTransformer2DModel.from_pretrained(
+        "prithivMLmods/Qwen-Image-Edit-Rapid-AIO-V19",
+        torch_dtype=dtype,
+        device_map="balanced",
+        max_memory={i: ("2GiB" if i == 0 else "20GiB") for i in range(_n)},
+    )
+else:
+    transformer = QwenImageTransformer2DModel.from_pretrained(
         "prithivMLmods/Qwen-Image-Edit-Rapid-AIO-V19",
         torch_dtype=dtype,
         device_map="cuda",
-    ),
+    )
+
+pipe = QwenImageEditPlusPipeline.from_pretrained(
+    "FireRedTeam/FireRed-Image-Edit-1.1",
+    transformer=transformer,
     torch_dtype=dtype,
-).to(device)
+)
+if _shard:
+    # Text encoder and VAE live on the first GPU; the sharded transformer's
+    # accelerate hooks move activations between devices as needed.
+    pipe.text_encoder.to(device)
+    pipe.vae.to(device)
+else:
+    pipe = pipe.to(device)
 
 try:
     pipe.transformer.set_attn_processor(QwenDoubleStreamAttnProcessorFA3())

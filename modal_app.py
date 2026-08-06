@@ -66,7 +66,11 @@ def download_models():
 
 @app.function(
     image=image,
-    gpu="H100",
+    # The workspace has no payment method on file, and Modal gates big single
+    # GPUs (L40S/A100/H100) behind one. 4x A10G (96 GB total) is allowed and
+    # fits the ~55 GB of bf16 weights with the transformer sharded across GPUs.
+    # With a payment method added, a single "H100" is simpler and faster.
+    gpu="A10G:4",
     volumes={CACHE_DIR: hf_cache},
     scaledown_window=300,
     max_containers=1,
@@ -82,5 +86,9 @@ def ui():
             **os.environ,
             "GRADIO_SERVER_NAME": "0.0.0.0",
             "GRADIO_SERVER_PORT": str(PORT),
+            # Shard the 20B transformer across the 4 A10Gs.
+            "SHARD_TRANSFORMER": "1",
+            # FlashAttention-3 needs Hopper GPUs; A10G would crash at inference.
+            "FORCE_SDPA": "1",
         },
     )
