@@ -48,6 +48,19 @@ Using a **Lazy Loading** design for LoRA adapters, the system dynamically downlo
 
 ```
 
+### **Hosting on Modal**
+
+The app can be self-hosted on [Modal](https://modal.com) via `modal_app.py`, which runs `app.py` unchanged behind a Modal web endpoint with model weights cached in a persistent Volume:
+
+```bash
+pip install 'modal[api-proxy-support]'
+modal token set --token-id <id> --token-secret <secret>
+modal run modal_app.py::download_models   # one-time: warm the weights cache (~35 GB)
+modal deploy modal_app.py                 # prints the public URL
+```
+
+The default configuration uses 4x A10G GPUs (available on Modal without a payment method) and shards the 20B transformer across them (`SHARD_TRANSFORMER=1`), with FlashAttention-3 disabled (`FORCE_SDPA=1`) since it requires Hopper GPUs. On a workspace with a payment method, change `gpu="A10G:4"` to `gpu="H100"` in `modal_app.py` and drop those two env vars for faster inference. The app scales to zero after 5 idle minutes; cold starts take ~2 minutes.
+
 ### **Installation and Requirements**
 
 To set up the FireRed-Image-Edit-1.0-Fast environment locally, configure your system according to the specifications below. A modern CUDA-enabled GPU is required.
